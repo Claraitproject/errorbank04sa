@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Найдите проблему на диаграмме классов</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --accent:#7C6FF5; --accent-hover:#6658E0; --accent-light:#F1EEFE; --accent-light-border:#DCD5FC;
+    --ink:#1F2430; --ink-soft:#4B5160; --gray:#6B7280; --border:#E6E7EC;
+    --good:#2F9E5C; --good-bg:#EAF8F0; --good-border:#BEE9D0;
+    --bad-bg:#FDEEEE; --bad-border:#F5C9C7; --bad-text:#C13A34;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#fff; color:var(--ink); line-height:1.5; -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:880px; margin:0 auto; padding:36px 24px 60px;}
+  .tag-row{display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;}
+  .tag{font-size:12.5px; font-weight:600; padding:5px 12px; border-radius:999px; background:var(--accent-light); color:var(--accent-hover); border:1px solid var(--accent-light-border);}
+  .tag.muted{background:#F5F5F7; color:var(--gray); border-color:#E6E7EC;}
+  h1{font-size:26px; font-weight:800; margin:0 0 10px; letter-spacing:-0.01em;}
+  .lead{color:var(--ink-soft); font-size:15px; margin:0 0 26px; max-width:660px;}
+  .doc-card{border:1px solid var(--border); border-radius:14px; box-shadow:0 1px 2px rgba(20,20,43,0.04), 0 8px 24px rgba(20,20,43,0.05); overflow:hidden; background:#fff;}
+  .doc-header{background:#FAFAFC; border-bottom:1px solid var(--border); padding:14px 22px; font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--gray); display:flex; justify-content:space-between;}
+  .doc-body{padding:24px 20px 12px;}
+  .doc-title{font-size:14px; font-weight:700; color:var(--ink); margin:0 0 20px; padding-bottom:12px; border-bottom:1px solid var(--border);}
+
+  .diagram-wrap{position:relative; width:100%;}
+  svg{width:100%; height:auto; display:block; overflow:visible;}
+
+  /* classes */
+  .cls rect.box{fill:#fff; stroke:#B9BCC6; stroke-width:1.6; transition:stroke .15s ease, fill .15s ease;}
+  .cls{cursor:pointer;}
+  .cls:hover:not(.locked) rect.box{stroke:var(--accent); fill:var(--accent-light);}
+  .cls.wrong-flash rect.box{stroke:var(--bad-text); fill:var(--bad-bg);}
+  .cls text{font-family:'Inter',sans-serif; fill:var(--ink); pointer-events:none;}
+  .cls .attr{font-size:11.5px; fill:var(--gray);}
+  .cls .sep{stroke:#D5D7DE; stroke-width:1;}
+
+  /* associations */
+  .assoc{cursor:pointer;}
+  .assoc .hit{fill:transparent; transition:fill .15s ease;}
+  .assoc:hover:not(.locked) .hit{fill:var(--accent-light);}
+  .assoc.wrong-flash .hit{fill:var(--bad-bg);}
+  .assoc.correct.solved .hit{fill:var(--good-bg);}
+  .assoc line, .assoc polygon.dia{stroke:#9CA0AC; stroke-width:1.6;}
+  .assoc polygon.dia{fill:#9CA0AC;}
+  .assoc .mult{font-family:'Inter',sans-serif; font-size:13px; font-weight:700; fill:var(--ink); pointer-events:none;}
+  .assoc .rel{font-family:'Inter',sans-serif; font-size:11px; font-style:italic; fill:var(--gray); pointer-events:none;}
+  .assoc.correct.solved line, .assoc.correct.solved polygon.dia{stroke:var(--good);}
+  .assoc.correct.solved polygon.dia{fill:var(--good);}
+  .assoc.correct.solved .mult{fill:var(--good);}
+
+  .hint-bubble{position:absolute; background:var(--bad-text); color:#fff; font-size:12.5px; font-weight:600; padding:8px 13px; border-radius:8px; transform:translate(-50%, -112%); pointer-events:none; width:max-content; max-width:280px; text-align:center; display:none; z-index:5; line-height:1.35;}
+  .hint-bubble::after{content:""; position:absolute; left:50%; top:100%; transform:translateX(-50%); border:6px solid transparent; border-top-color:var(--bad-text);}
+
+  .toolbar{display:flex; justify-content:space-between; align-items:center; margin-top:8px; padding-top:14px; border-top:1px solid var(--border);}
+  .attempts{font-size:13px; color:var(--gray);}
+  .btn{background:none; border:1.5px solid var(--accent-light-border); color:var(--accent-hover); font-family:inherit; font-weight:600; font-size:13.5px; padding:9px 16px; border-radius:8px; cursor:pointer; transition:background .15s ease;}
+  .btn:hover{background:var(--accent-light);}
+  .btn.primary{background:var(--accent); color:#fff; border-color:var(--accent);}
+  .btn.primary:hover{background:var(--accent-hover);}
+
+  .reveal{display:none; margin-top:24px; animation:fadein .3s ease;}
+  @keyframes fadein{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);}}
+  .reveal-card{border:1px solid var(--good-border); background:var(--good-bg); border-radius:14px; padding:22px 24px;}
+  .reveal-label{font-size:12.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; color:var(--good); margin-bottom:10px;}
+  .reveal-text{font-size:14.5px; color:var(--ink); margin:0 0 16px;}
+  .fix-box{background:#fff; border:1px solid var(--border); border-radius:10px; padding:14px 16px; font-size:14px; margin-bottom:10px;}
+  .fix-box .label{font-size:12px; font-weight:700; color:var(--gray); text-transform:uppercase; letter-spacing:0.02em; margin-bottom:6px;}
+  .fix-box.was{border-left:3px solid var(--bad-text);}
+  .fix-box.now{border-left:3px solid var(--good);}
+  .lesson-ref{font-size:13px; color:var(--ink-soft); margin-top:14px;}
+  .footer-btn{margin-top:22px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="tag-row">
+    <span class="tag">SA-I-004 · Моделирование данных и процессов</span>
+  </div>
+  <h1>Найдите проблему на диаграмме классов</h1>
+  <p class="lead">
+    Ниже — фрагмент диаграммы классов предметной области FoodMart. Все связи подписаны
+    кратностями, на первый взгляд аккуратно, и диаграмма ушла в разработку без
+    вопросов. Но одна из связей, будучи реализованной так, как нарисована, сломает
+    модель данных. Кликните на связь, которая вызывает вопросы.
+  </p>
+
+  <div class="doc-card">
+    <div class="doc-header">
+      <span>DomainModel_FoodMart_v1.4.drawio</span>
+      <span>Диаграмма классов · Заказы</span>
+    </div>
+    <div class="doc-body">
+      <p class="doc-title">Диаграмма классов: оформление заказа</p>
+
+      <div class="diagram-wrap" id="diagram-wrap">
+        <div class="hint-bubble" id="hint-bubble"></div>
+        <svg viewBox="0 0 860 380" xmlns="http://www.w3.org/2000/svg">
+
+          <!-- ===== ASSOCIATIONS ===== -->
+
+          <!-- Customer — Order -->
+          <g class="assoc" data-correct="false" data-hint="Клиент может ещё не сделать ни одного заказа (например, только зарегистрировался) — поэтому «0..*» здесь верно. Проблема не в этой связи." onclick="handleClick(this)">
+            <rect class="hit" x="200" y="64" width="100" height="56" rx="8"></rect>
+            <line x1="200" y1="90" x2="300" y2="90"></line>
+            <text class="mult" x="206" y="82">1</text>
+            <text class="mult" x="294" y="82" text-anchor="end">0..*</text>
+            <text class="rel" x="250" y="108" text-anchor="middle">оформляет</text>
+          </g>
+
+          <!-- Order — DeliveryAddress -->
+          <g class="assoc" data-correct="false" data-hint="Много заказов могут доставляться на один адрес, а у каждого заказа адрес ровно один — кратности расставлены верно. Проблема не в этой связи." onclick="handleClick(this)">
+            <rect class="hit" x="490" y="64" width="150" height="56" rx="8"></rect>
+            <line x1="490" y1="90" x2="640" y2="90"></line>
+            <text class="mult" x="496" y="82">*</text>
+            <text class="mult" x="634" y="82" text-anchor="end">1</text>
+            <text class="rel" x="565" y="108" text-anchor="middle">доставляется по</text>
+          </g>
+
+          <!-- Order — OrderItem (composition) -->
+          <g class="assoc" data-correct="false" data-hint="Заказ не бывает пустым — минимум одна позиция, а позиция существует только внутри заказа (отсюда закрашенный ромб). Здесь всё верно." onclick="handleClick(this)">
+            <rect class="hit" x="372" y="160" width="110" height="80" rx="8"></rect>
+            <polygon class="dia" points="395,160 403,168 395,176 387,168"></polygon>
+            <line x1="395" y1="176" x2="395" y2="240"></line>
+            <text class="mult" x="404" y="192">1</text>
+            <text class="mult" x="404" y="232">1..*</text>
+            <text class="rel" x="440" y="212">состоит из</text>
+          </g>
+
+          <!-- OrderItem — Product (THE ANSWER: multiplicities reversed) -->
+          <g class="assoc" data-correct="true" onclick="handleClick(this)">
+            <rect class="hit" x="490" y="264" width="150" height="56" rx="8"></rect>
+            <line x1="490" y1="290" x2="640" y2="290"></line>
+            <text class="mult" x="496" y="282">1</text>
+            <text class="mult" x="634" y="282" text-anchor="end">*</text>
+            <text class="rel" x="565" y="308" text-anchor="middle">относится к</text>
+          </g>
+
+          <!-- ===== CLASSES ===== -->
+
+          <g class="cls" data-hint="Сам класс и его атрибуты в порядке — вопросы стоит искать в связях между классами." onclick="handleClassClick(this)">
+            <rect class="box" x="30" y="40" width="170" height="100" rx="8"></rect>
+            <text x="115" y="64" font-size="13.5" font-weight="700" text-anchor="middle">Customer</text>
+            <line class="sep" x1="30" y1="76" x2="200" y2="76"></line>
+            <text class="attr" x="44" y="97">id: int</text>
+            <text class="attr" x="44" y="114">name: string</text>
+            <text class="attr" x="44" y="131">email: string</text>
+          </g>
+
+          <g class="cls" data-hint="Сам класс и его атрибуты в порядке — вопросы стоит искать в связях между классами." onclick="handleClassClick(this)">
+            <rect class="box" x="300" y="40" width="190" height="120" rx="8"></rect>
+            <text x="395" y="64" font-size="13.5" font-weight="700" text-anchor="middle">Order</text>
+            <line class="sep" x1="300" y1="76" x2="490" y2="76"></line>
+            <text class="attr" x="314" y="97">id: int</text>
+            <text class="attr" x="314" y="114">createdAt: datetime</text>
+            <text class="attr" x="314" y="131">status: string</text>
+            <text class="attr" x="314" y="148">totalPrice: decimal</text>
+          </g>
+
+          <g class="cls" data-hint="Сам класс и его атрибуты в порядке — вопросы стоит искать в связях между классами." onclick="handleClassClick(this)">
+            <rect class="box" x="640" y="40" width="190" height="100" rx="8"></rect>
+            <text x="735" y="64" font-size="13.5" font-weight="700" text-anchor="middle">DeliveryAddress</text>
+            <line class="sep" x1="640" y1="76" x2="830" y2="76"></line>
+            <text class="attr" x="654" y="97">city: string</text>
+            <text class="attr" x="654" y="114">street: string</text>
+            <text class="attr" x="654" y="131">building: string</text>
+          </g>
+
+          <g class="cls" data-hint="Сам класс и его атрибуты в порядке — вопросы стоит искать в связях между классами." onclick="handleClassClick(this)">
+            <rect class="box" x="300" y="240" width="190" height="100" rx="8"></rect>
+            <text x="395" y="264" font-size="13.5" font-weight="700" text-anchor="middle">OrderItem</text>
+            <line class="sep" x1="300" y1="276" x2="490" y2="276"></line>
+            <text class="attr" x="314" y="297">quantity: int</text>
+            <text class="attr" x="314" y="314">unitPrice: decimal</text>
+          </g>
+
+          <g class="cls" data-hint="Сам класс и его атрибуты в порядке — вопросы стоит искать в связях между классами." onclick="handleClassClick(this)">
+            <rect class="box" x="640" y="240" width="190" height="100" rx="8"></rect>
+            <text x="735" y="264" font-size="13.5" font-weight="700" text-anchor="middle">Product</text>
+            <line class="sep" x1="640" y1="276" x2="830" y2="276"></line>
+            <text class="attr" x="654" y="297">sku: string</text>
+            <text class="attr" x="654" y="314">name: string</text>
+            <text class="attr" x="654" y="331">price: decimal</text>
+          </g>
+
+        </svg>
+      </div>
+    </div>
+
+    <div class="doc-body" style="padding-top:0;">
+      <div class="toolbar">
+        <span class="attempts" id="attempts-label">Попыток: 0</span>
+        <button class="btn" onclick="giveUp()">Показать разбор</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="reveal" id="reveal">
+    <div class="reveal-card">
+      <div class="reveal-label">✓ Проблема найдена — связь OrderItem и Product</div>
+      <p class="reveal-text">
+        Кратность читается так: число у класса показывает, сколько его экземпляров
+        связано с одним экземпляром класса на другом конце. На схеме у OrderItem стоит
+        «1», а у Product — «*». Читаем: «одна позиция заказа относится ко многим
+        товарам, а каждый товар входит ровно в одну позицию». Это перевёрнуто
+        относительно бизнеса: позиция заказа — это один конкретный товар в
+        конкретном количестве, а сам товар (например, «Молоко 1 л») встречается в
+        тысячах позиций разных заказов.
+      </p>
+      <p class="reveal-text">
+        Если реализовать диаграмму буквально, у модели данных остаётся два плохих
+        пути: либо каждый товар можно «продать» только один раз, либо список товаров
+        приходится прятать в одно поле позиции — и мы возвращаемся к проблеме со
+        списком значений в одной колонке из карточки про нормализацию.
+      </p>
+      <div class="fix-box was">
+        <div class="label">Было</div>
+        OrderItem «1» —— «*» Product: позиция ссылается на много товаров, товар входит в одну позицию.
+      </div>
+      <div class="fix-box now">
+        <div class="label">Как поправить</div>
+        OrderItem «*» —— «1» Product: позиция заказа относится ровно к одному товару,
+        а один товар может входить во множество позиций.
+      </div>
+      <p class="lesson-ref">
+        Разбирается в модуле SA-I-004 (диаграммы классов, кратности связей). Простой
+        приём проверки: прочитать связь вслух в обе стороны и сверить с реальным
+        бизнесом — «одна позиция — сколько товаров? один товар — в скольких позициях?».
+        Заметьте, что остальные связи на схеме — и «0..*» у заказов клиента, и «1..*»
+        у позиций заказа — выглядят необычнее, но верны.
+      </p>
+      <div class="footer-btn">
+        <button class="btn primary" onclick="location.reload()">Попробовать ещё раз</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let attempts = 0;
+let solved = false;
+const hintBubble = document.getElementById('hint-bubble');
+const wrapEl = document.getElementById('diagram-wrap');
+
+function clearFlash(){
+  document.querySelectorAll('.assoc, .cls').forEach(n => n.classList.remove('wrong-flash'));
+}
+
+function registerAttempt(){
+  attempts++;
+  document.getElementById('attempts-label').textContent = `Попыток: ${attempts}`;
+  clearFlash();
+}
+
+function handleClick(el){
+  if(solved) return;
+  registerAttempt();
+  if(el.dataset.correct === 'true'){
+    solved = true;
+    el.classList.add('correct', 'solved');
+    document.querySelectorAll('.assoc, .cls').forEach(n => n.classList.add('locked'));
+    hintBubble.style.display = 'none';
+    showReveal();
+  } else {
+    el.classList.add('wrong-flash');
+    showHint(el);
+  }
+}
+
+function handleClassClick(el){
+  if(solved) return;
+  registerAttempt();
+  el.classList.add('wrong-flash');
+  showHint(el);
+}
+
+function showHint(el){
+  const bbox = el.getBoundingClientRect();
+  const wrapBox = wrapEl.getBoundingClientRect();
+  hintBubble.textContent = el.dataset.hint || 'Здесь всё в порядке — попробуйте другое место.';
+  hintBubble.style.display = 'block';
+  const half = hintBubble.offsetWidth / 2;
+  let left = bbox.left - wrapBox.left + bbox.width / 2;
+  left = Math.max(half, Math.min(wrapBox.width - half, left));
+  hintBubble.style.left = left + 'px';
+  hintBubble.style.top = (bbox.top - wrapBox.top) + 'px';
+  clearTimeout(window._hintTimer);
+  window._hintTimer = setTimeout(() => { hintBubble.style.display = 'none'; }, 3000);
+}
+
+function showReveal(){
+  const r = document.getElementById('reveal');
+  r.style.display = 'block';
+  r.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function giveUp(){
+  if(solved) return;
+  solved = true;
+  clearFlash();
+  document.querySelectorAll('.assoc').forEach(n => {
+    if(n.dataset.correct === 'true') n.classList.add('correct', 'solved');
+  });
+  document.querySelectorAll('.assoc, .cls').forEach(n => n.classList.add('locked'));
+  hintBubble.style.display = 'none';
+  showReveal();
+}
+</script>
+</body>
+</html>
